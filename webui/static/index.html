@@ -1,1 +1,541 @@
-<!doctype html><title>yt-dlp</title>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yt-dlp 网页版</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1f2328; --muted: #656d76; --line: #d8dee4;
+    --accent: #2563eb; --accent-weak: #e8efff; --ok: #1a7f37; --err: #cf222e; --warn: #9a6700;
+    --changed: #fff8c5; --mono: Consolas, "Cascadia Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px; }
+  textarea, input[type=text], select { width: 100%; font: inherit; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit; }
+  textarea { resize: vertical; }
+  button { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; cursor: pointer; }
+  button:hover { background: #f0f2f4; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #1d4ed8; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 12px; }
+  .row > label { display: inline-flex; gap: 6px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+  .seg button:last-child { border-right: 0; }
+  .seg button { white-space: nowrap; }
+  .seg button.on { background: var(--accent-weak); color: var(--accent); font-weight: 600; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .error { color: var(--err); }
+  .hint { color: var(--warn); }
+  .probe { display: flex; gap: 12px; margin-top: 12px; }
+  .probe img { width: 160px; max-width: 40%; border-radius: 6px; object-fit: cover; align-self: flex-start; }
+  .entries { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 6px;
+    margin-top: 8px; padding: 4px 8px; }
+  .entries label { display: flex; gap: 8px; padding: 2px 0; }
+  details.group { border-top: 1px solid var(--line); }
+  details.group > summary { cursor: pointer; padding: 10px 0; display: flex; gap: 8px; align-items: center;
+    list-style: none; }
+  details.group > summary::before { content: "▸"; color: var(--muted); }
+  details.group[open] > summary::before { content: "▾"; }
+  .badge { font-size: 12px; background: var(--changed); padding: 0 6px; border-radius: 4px; }
+  .grow { flex: 1; }
+  .opt { padding: 8px; border-radius: 6px; display: grid; grid-template-columns: 220px 1fr; gap: 4px 12px; }
+  .opt.changed { background: var(--changed); }
+  .opt .flags { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .opt .help { grid-column: 2; color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+  .opt input[type=checkbox] { justify-self: start; width: 18px; height: 18px; }
+  .cmd { font-family: var(--mono); font-size: 13px; background: #0d1117; color: #e6edf3; padding: 12px;
+    border-radius: 6px; white-space: pre-wrap; word-break: break-all; min-height: 44px; }
+  .task { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .task .title { font-weight: 600; word-break: break-all; }
+  .bar { height: 8px; background: #eaeef2; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .bar.indeterminate > div { width: 30%; animation: slide 1.2s infinite linear; }
+  @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+  .st-finished { color: var(--ok); } .st-error { color: var(--err); } .st-cancelled { color: var(--muted); }
+  .log { font-family: var(--mono); font-size: 12px; background: #f6f8fa; border-radius: 6px; padding: 8px;
+    max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+  video, audio { width: 100%; margin-top: 8px; border-radius: 6px; }
+  .files li { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .files ul { list-style: none; margin: 0; padding: 0; }
+  .files .name { flex: 1; word-break: break-all; }
+  @media (max-width: 640px) {
+    .opt { grid-template-columns: 1fr; }
+    .opt .help { grid-column: 1; }
+    .probe { flex-direction: column; }
+    .probe img { max-width: 100%; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>yt-dlp 网页版</h1>
+
+  <section class="card" id="common">
+    <h2>常用</h2>
+    <textarea id="text" rows="3" placeholder="粘贴视频链接，或整段分享文字（会自动找出链接）；多个链接每行一个"></textarea>
+    <div class="row">
+      <button id="probeBtn">解析</button>
+      <span id="probeMsg" class="muted"></span>
+    </div>
+    <div id="probeBox"></div>
+
+    <div class="row">
+      <span>画质</span>
+      <div class="seg" id="quality">
+        <button data-q="best">最佳</button>
+        <button data-q="1080">1080p</button>
+        <button data-q="720">720p</button>
+        <button data-q="audio">只要音频 mp3</button>
+      </div>
+      <span id="qualityCustom" class="muted" hidden>（高级设置里自定义了格式）</span>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="optSubs"> 下载字幕（中/英）</label>
+      <label><input type="checkbox" id="optThumb"> 嵌入封面</label>
+      <label><input type="checkbox" id="optMeta"> 嵌入元数据</label>
+    </div>
+    <div class="row">
+      <span>Cookie 来源</span>
+      <select id="cookies" style="width:auto">
+        <option value="">不用</option>
+        <option value="edge">Edge</option>
+        <option value="chrome">Chrome</option>
+        <option value="firefox">Firefox</option>
+      </select>
+      <span id="cookiesHint" class="hint" hidden>请先完全关闭该浏览器，否则读不到 Cookie</span>
+    </div>
+    <div class="row">
+      <button class="primary" id="downloadBtn">下载</button>
+      <span id="downloadMsg" class="error"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>命令预览</h2>
+    <div class="cmd" id="cmd">yt-dlp</div>
+    <div class="row"><button id="copyBtn">复制</button><span id="copyMsg" class="muted"></span></div>
+  </section>
+
+  <section class="card">
+    <h2>高级设置 <span id="advCount" class="muted"></span></h2>
+    <input type="text" id="search" placeholder="搜索参数名或说明，例如 proxy、subtitle">
+    <div id="groups"></div>
+  </section>
+
+  <section class="card">
+    <h2>任务</h2>
+    <div id="tasks"><p class="muted" id="noTasks">还没有任务</p></div>
+  </section>
+
+  <section class="card files">
+    <div class="row" style="margin-top:0">
+      <h2 class="grow" style="margin:0">已下载</h2>
+      <button id="openFolderBtn">打开文件夹</button>
+    </div>
+    <ul id="files"></ul>
+  </section>
+</main>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) node.append(c);
+  return node;
+};
+
+const QUALITY_FORMATS = {
+  1080: 'bv*[height<=1080]+ba/b[height<=1080]',
+  720: 'bv*[height<=720]+ba/b[height<=720]',
+};
+const SUB_LANGS = ['zh.*', 'en.*'];
+
+const form = {};
+const controls = {};        // key -> {option, input, row, group}
+const groupsUi = [];        // {group, details, badge}
+let probeEntries = null;
+
+/* ---------- 表单状态 ---------- */
+function isSet(v) {
+  return v === true || (typeof v === 'string' && v !== '') || (Array.isArray(v) && v.length > 0);
+}
+
+function setValue(key, value) {
+  if (isSet(value)) form[key] = value; else delete form[key];
+  renderControl(key);
+}
+
+function update(changes) {
+  for (const [k, v] of Object.entries(changes)) setValue(k, v);
+  afterChange();
+}
+
+function afterChange() {
+  renderCommon();
+  renderGroupBadges();
+  schedulePreview();
+}
+
+/* ---------- 高级设置 ---------- */
+function buildAdvanced(schema) {
+  const container = $('groups');
+  let total = 0;
+  for (const group of schema.groups) {
+    const badge = el('span', { className: 'badge', hidden: true });
+    const reset = el('button', { textContent: '重置', type: 'button' });
+    const summary = el('summary', {},
+      el('span', { textContent: group.title_zh }),
+      el('span', { className: 'muted', textContent: `${group.title} · ${group.options.length}` }),
+      badge, el('span', { className: 'grow' }), reset);
+    const details = el('details', { className: 'group' }, summary);
+    reset.addEventListener('click', (e) => {
+      e.preventDefault();
+      for (const o of group.options) setValue(o.key, undefined);
+      afterChange();
+    });
+    for (const option of group.options) {
+      total++;
+      const input = makeInput(option);
+      const row = el('div', { className: 'opt' },
+        el('div', { className: 'flags', textContent: option.flags.join(', ') + (option.metavar ? ' ' + option.metavar : '') }),
+        input,
+        el('div', { className: 'help', textContent: option.help }));
+      details.append(row);
+      controls[option.key] = { option, input, row, group };
+    }
+    container.append(details);
+    groupsUi.push({ group, details, badge });
+  }
+  $('advCount').textContent = `共 ${schema.groups.length} 组、${total} 个参数`;
+}
+
+function makeInput(option) {
+  let input;
+  if (option.kind === 'flag') {
+    input = el('input', { type: 'checkbox' });
+    input.addEventListener('change', () => update({ [option.key]: input.checked }));
+  } else if (option.kind === 'choice') {
+    input = el('select', {}, el('option', { value: '', textContent: '（默认）' }),
+      ...option.choices.map((c) => el('option', { value: c, textContent: c })));
+    input.addEventListener('change', () => update({ [option.key]: input.value }));
+  } else if (option.kind === 'multi') {
+    input = el('textarea', { rows: 1, placeholder: (option.metavar || '') + '（可多行，每行一个）' });
+    input.addEventListener('input', () =>
+      update({ [option.key]: input.value.split('\n').map((s) => s.trim()).filter(Boolean) }));
+  } else {
+    input = el('input', { type: 'text', placeholder: option.metavar || '' });
+    input.addEventListener('input', () => update({ [option.key]: input.value.trim() }));
+  }
+  return input;
+}
+
+function renderControl(key) {
+  const c = controls[key];
+  if (!c) return;
+  const v = form[key];
+  const active = document.activeElement === c.input;
+  if (c.option.kind === 'flag') c.input.checked = v === true;
+  else if (c.option.kind === 'multi') {
+    const text = (v || []).join('\n');
+    if (!active || c.input.value.split('\n').map((s) => s.trim()).filter(Boolean).join('\n') !== text) c.input.value = text;
+  } else if (!active || c.input.value.trim() !== (v || '')) c.input.value = v || '';
+  c.row.classList.toggle('changed', isSet(v));
+}
+
+function renderGroupBadges() {
+  for (const g of groupsUi) {
+    const n = g.group.options.filter((o) => isSet(form[o.key])).length;
+    g.badge.hidden = n === 0;
+    g.badge.textContent = `已改 ${n} 项`;
+  }
+}
+
+$('search').addEventListener('input', () => {
+  const q = $('search').value.trim().toLowerCase();
+  for (const g of groupsUi) {
+    let hits = 0;
+    for (const o of g.group.options) {
+      const hit = !q || o.flags.join(' ').toLowerCase().includes(q) || o.help.toLowerCase().includes(q);
+      controls[o.key].row.hidden = !hit;
+      if (hit) hits++;
+    }
+    g.details.hidden = q && hits === 0;
+    g.details.open = Boolean(q) && hits > 0;
+  }
+});
+
+/* ---------- 常用区 ---------- */
+function currentQuality() {
+  if (form['--extract-audio'] && form['--audio-format'] === 'mp3' && !form['--format']) return 'audio';
+  if (!form['--format'] && !form['--extract-audio']) return 'best';
+  for (const [q, f] of Object.entries(QUALITY_FORMATS)) {
+    if (form['--format'] === f && !form['--extract-audio']) return q;
+  }
+  return null;
+}
+
+function renderCommon() {
+  const q = currentQuality();
+  for (const b of $('quality').querySelectorAll('button')) b.classList.toggle('on', b.dataset.q === q);
+  $('qualityCustom').hidden = q !== null;
+  const langs = form['--sub-langs'] || [];
+  $('optSubs').checked = form['--write-subs'] === true && SUB_LANGS.every((l) => langs.includes(l));
+  $('optThumb').checked = form['--embed-thumbnail'] === true;
+  $('optMeta').checked = form['--embed-metadata'] === true;
+  $('cookies').value = form['--cookies-from-browser'] || '';
+  if ($('cookies').value !== (form['--cookies-from-browser'] || '')) $('cookies').value = '';
+  $('cookiesHint').hidden = !form['--cookies-from-browser'];
+}
+
+$('quality').addEventListener('click', (e) => {
+  const q = e.target.dataset && e.target.dataset.q;
+  if (!q) return;
+  if (q === 'best') update({ '--format': '', '--extract-audio': false, '--audio-format': '' });
+  else if (q === 'audio') update({ '--format': '', '--extract-audio': true, '--audio-format': 'mp3' });
+  else update({ '--format': QUALITY_FORMATS[q], '--extract-audio': false, '--audio-format': '' });
+});
+$('optSubs').addEventListener('change', (e) => update(e.target.checked
+  ? { '--write-subs': true, '--sub-langs': SUB_LANGS.slice() }
+  : { '--write-subs': false, '--sub-langs': [] }));
+$('optThumb').addEventListener('change', (e) => update({ '--embed-thumbnail': e.target.checked }));
+$('optMeta').addEventListener('change', (e) => update({ '--embed-metadata': e.target.checked }));
+$('cookies').addEventListener('change', (e) => update({ '--cookies-from-browser': e.target.value }));
+$('text').addEventListener('input', () => { $('downloadMsg').textContent = ''; probeEntries = null; $('probeBox').replaceChildren(); schedulePreview(); });
+
+/* ---------- 解析 ---------- */
+function fmtDuration(sec) {
+  if (sec == null) return '';
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+async function postJson(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || `请求失败（${r.status}）`), { hint: data.hint });
+  return data;
+}
+
+$('probeBtn').addEventListener('click', async () => {
+  const btn = $('probeBtn');
+  btn.disabled = true;
+  $('probeMsg').className = 'muted';
+  $('probeMsg').textContent = '解析中…';
+  $('probeBox').replaceChildren();
+  try {
+    const info = await postJson('/api/probe', { text: $('text').value, cookies_browser: form['--cookies-from-browser'] || null });
+    $('probeMsg').textContent = '';
+    renderProbe(info);
+  } catch (e) {
+    $('probeMsg').className = 'error';
+    $('probeMsg').textContent = e.message;
+    if (e.hint) $('probeBox').append(el('p', { className: 'hint', textContent: e.hint }));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderProbe(info) {
+  const meta = el('div', {},
+    el('div', { className: 'title', textContent: info.title || '（无标题）' }),
+    el('div', { className: 'muted', textContent: [info.uploader, fmtDuration(info.duration)].filter(Boolean).join(' · ') }));
+  const box = el('div', { className: 'probe' });
+  if (info.thumbnail) box.append(el('img', { src: info.thumbnail, alt: '', referrerPolicy: 'no-referrer' }));
+  box.append(meta);
+  $('probeBox').replaceChildren(box);
+  probeEntries = null;
+  if (info.entries) {
+    probeEntries = info.entries;
+    const list = el('div', { className: 'entries' });
+    const all = el('input', { type: 'checkbox', checked: true });
+    all.addEventListener('change', () => {
+      for (const c of list.querySelectorAll('input')) c.checked = all.checked;
+      syncEntries(list);
+    });
+    for (const e of info.entries) {
+      const c = el('input', { type: 'checkbox', checked: true, value: e.index });
+      c.addEventListener('change', () => syncEntries(list));
+      list.append(el('label', {}, c, el('span', { textContent: `${e.index}. ${e.title || ''}` }),
+        el('span', { className: 'muted', textContent: fmtDuration(e.duration) })));
+    }
+    meta.append(el('label', { className: 'muted' }, all, ` 合集共 ${info.entries.length} 个，全选`), list);
+    update({ '--playlist-items': '' });
+  }
+}
+
+function syncEntries(list) {
+  const boxes = [...list.querySelectorAll('input')];
+  const picked = boxes.filter((b) => b.checked).map((b) => b.value);
+  update({ '--playlist-items': picked.length === boxes.length ? '' : picked.join(',') });
+}
+
+/* ---------- 命令预览 ---------- */
+let previewTimer = null;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    try {
+      $('cmd').textContent = (await postJson('/api/preview-command', { form, text: $('text').value })).command;
+    } catch (e) {
+      $('cmd').textContent = e.message;
+    }
+  }, 300);
+}
+
+$('copyBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('cmd').textContent);
+    $('copyMsg').textContent = '已复制';
+  } catch {
+    getSelection().selectAllChildren($('cmd'));
+    $('copyMsg').textContent = '已选中，按 Ctrl+C 复制';
+  }
+  setTimeout(() => { $('copyMsg').textContent = ''; }, 2000);
+});
+
+/* ---------- 下载与任务 ---------- */
+const STATUS_TEXT = { running: '下载中', finished: '已完成', error: '出错', cancelled: '已取消' };
+
+function fmtBytes(n) {
+  if (n == null) return '?';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+
+function baseName(path) {
+  return path.split(/[\\/]/).pop();
+}
+
+$('downloadBtn').addEventListener('click', async () => {
+  $('downloadMsg').textContent = '';
+  try {
+    const task = await postJson('/api/tasks', { form, text: $('text').value });
+    addTaskCard(task, true);
+  } catch (e) {
+    $('downloadMsg').textContent = e.message + (e.hint ? '：' + e.hint : '');
+  }
+});
+
+function addTaskCard(task, prepend) {
+  $('noTasks').hidden = true;
+  const ui = {
+    title: el('div', { className: 'title', textContent: task.title || task.urls.join(' ') }),
+    status: el('span'),
+    stats: el('span', { className: 'muted' }),
+    fill: el('div'),
+    cancel: el('button', { textContent: '取消', type: 'button' }),
+    logBtn: el('button', { textContent: '日志', type: 'button' }),
+    hint: el('div', { className: 'hint', hidden: true }),
+    log: el('div', { className: 'log', hidden: true }),
+    files: el('div'),
+  };
+  ui.bar = el('div', { className: 'bar' }, ui.fill);
+  const card = el('div', { className: 'task' }, ui.title, ui.bar,
+    el('div', { className: 'row', style: 'margin-top:4px' }, ui.status, ui.stats, el('span', { className: 'grow' }), ui.cancel, ui.logBtn),
+    ui.hint, ui.files, ui.log);
+  $('tasks')[prepend ? 'prepend' : 'append'](card);
+  ui.cancel.addEventListener('click', () => postJson(`/api/tasks/${task.id}/cancel`));
+  ui.logBtn.addEventListener('click', () => { ui.log.hidden = !ui.log.hidden; ui.log.scrollTop = ui.log.scrollHeight; });
+  setStatus(ui, task.status);
+  connect(task, ui);
+}
+
+function setStatus(ui, status) {
+  ui.status.textContent = STATUS_TEXT[status] || status;
+  ui.status.className = 'st-' + status;
+  ui.cancel.hidden = status !== 'running';
+  if (status !== 'running') {
+    ui.bar.classList.remove('indeterminate');
+    if (status === 'finished') ui.fill.style.width = '100%';
+  }
+}
+
+function connect(task, ui) {
+  const source = new EventSource(`/api/tasks/${task.id}/events?after=0`);
+  source.onmessage = (msg) => {
+    const ev = JSON.parse(msg.data);
+    if (ev.type === 'title') ui.title.textContent = ev.title;
+    else if (ev.type === 'progress') {
+      ui.bar.classList.toggle('indeterminate', ev.percent == null);
+      if (ev.percent != null) ui.fill.style.width = ev.percent + '%';
+      const parts = [ev.percent != null ? ev.percent + '%' : '',
+        `${fmtBytes(ev.downloaded)} / ${fmtBytes(ev.total)}`,
+        ev.speed ? fmtBytes(ev.speed) + '/s' : '',
+        ev.eta != null ? '剩余 ' + fmtDuration(ev.eta) : ''];
+      ui.stats.textContent = parts.filter(Boolean).join(' · ');
+    } else if (ev.type === 'file') addFile(ui, ev.path);
+    else if (ev.type === 'log') {
+      ui.log.append(ev.text + '\n');
+      ui.log.scrollTop = ui.log.scrollHeight;
+    } else if (ev.type === 'status') {
+      setStatus(ui, ev.status);
+      source.close();
+      if (ev.status === 'error') showHint(task.id, ui);
+      if (ev.status === 'finished') loadFiles();
+    }
+  };
+  source.onerror = () => { if (source.readyState === EventSource.CLOSED) return; };
+}
+
+async function showHint(id, ui) {
+  const tasks = await (await fetch('/api/tasks')).json();
+  const t = tasks.find((x) => x.id === id);
+  ui.hint.textContent = (t && t.error_hint) || '下载失败，展开「日志」查看原因';
+  ui.hint.hidden = false;
+}
+
+function mediaFor(name) {
+  const src = '/files/' + encodeURIComponent(name);
+  return /\.(mp3|m4a|opus|ogg|wav|flac|aac)$/i.test(name)
+    ? el('audio', { controls: true, src }) : el('video', { controls: true, src });
+}
+
+function addFile(ui, path) {
+  const name = baseName(path);
+  const play = el('button', { textContent: '播放', type: 'button' });
+  const holder = el('div');
+  play.addEventListener('click', () => holder.replaceChildren(mediaFor(name)));
+  ui.files.append(el('div', { className: 'row', style: 'margin-top:6px' },
+    el('span', { className: 'muted grow', textContent: name }), play), holder);
+}
+
+/* ---------- 已下载 ---------- */
+async function loadFiles() {
+  const files = await (await fetch('/api/files')).json();
+  $('files').replaceChildren(...(files.length ? files.map((f) => {
+    const holder = el('div');
+    const play = el('button', { textContent: '播放', type: 'button' });
+    play.addEventListener('click', () => holder.replaceChildren(mediaFor(f.name)));
+    const li = el('li', {}, el('span', { className: 'name', textContent: f.name }),
+      el('span', { className: 'muted', textContent: fmtBytes(f.size) }), play);
+    return el('div', {}, li, holder);
+  }) : [el('li', { className: 'muted', textContent: '还没有文件' })]));
+}
+$('openFolderBtn').addEventListener('click', () => postJson('/api/open-folder'));
+
+/* ---------- 启动 ---------- */
+(async () => {
+  buildAdvanced(await (await fetch('/api/schema')).json());
+  afterChange();
+  for (const t of (await (await fetch('/api/tasks')).json()).reverse()) addTaskCard(t, true);
+  loadFiles();
+})();
+</script>
+</body>
+</html>
