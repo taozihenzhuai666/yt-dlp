@@ -1,9 +1,12 @@
 """Run yt-dlp downloads in the background and collect their events."""
+import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
+import time
 import uuid
 
 from webui.runner import build_args, explain_error, parse_line
@@ -53,7 +56,7 @@ class Task:
         event = parse_line(line)
         if event['type'] == 'progress':
             self.progress = event
-            if event.get('filename'):
+            if event.get('filename') and event.get('status') == 'downloading':
                 self._partials.add(event['filename'])
         elif event['type'] == 'title':
             self.title = event['title']
@@ -131,16 +134,34 @@ class TaskManager:
         return True
 
 
+_FORMAT_SUFFIX_RE = re.compile(r'\.f[0-9A-Za-z_-]+(\.[^.\\/]+)$')
+
+
+def _leftovers(name):
+    # Everything yt-dlp/ffmpeg may leave for a file that was still downloading:
+    # the file itself, .part/.ytdl/-FragN pieces, and the merger's <title>.temp.<ext>
+    paths = set(glob.glob(glob.escape(name) + '*'))
+    merged = _FORMAT_SUFFIX_RE.sub(r'.temp\1', name)
+    if merged != name:
+        paths.add(merged)
+    return paths
+
+
 def _remove_partials(filenames):
-    for name in filenames:
-        candidates = [name + '.part', name + '.ytdl']
-        if name.endswith('.part'):
-            candidates.append(name)
-        for path in candidates:
+    pending = set().union(*map(_leftovers, filenames)) if filenames else set()
+    for _ in range(10):  # a killed ffmpeg may hold its handles for a moment
+        for path in list(pending):
             try:
                 os.remove(path)
+            except FileNotFoundError:
+                pending.discard(path)
             except OSError:
-                pass
+                continue
+            else:
+                pending.discard(path)
+        if not pending:
+            return
+        time.sleep(0.3)
 
 
 class ProbeError(Exception):

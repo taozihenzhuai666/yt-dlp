@@ -116,3 +116,32 @@ def test_probe_error_and_timeout(tmp_path):
     with pytest.raises(ProbeError) as e:
         probe('https://x', None, cmd=slow, timeout=1)
     assert '超时' in e.value.message
+
+
+def test_cancel_removes_merge_and_fragment_leftovers(tmp_path):
+    names = ['t.f1.mp4', 't.f2.m4a.part', 't.f2.m4a.part-Frag3', 't.f2.m4a.ytdl', 't.temp.mp4']
+    keep = tmp_path / 'old.mp4'
+    keep.write_text('x')
+    marker = tmp_path / 'ready'
+    cmd = fake(tmp_path, f'''
+        import json, os, time
+        d = r"{tmp_path}"
+        for n in {names!r}:
+            open(os.path.join(d, n), "w").write("x")
+        def p(status, name):
+            print("WEBUI_PROGRESS " + json.dumps({{"status": status, "downloaded_bytes": 1, "filename": os.path.join(d, name)}}), flush=True)
+        p("finished", "old.mp4")
+        p("downloading", "t.f1.mp4")
+        p("downloading", "t.f2.m4a")
+        open(r"{marker}", "w").write("1")
+        time.sleep(60)
+    ''')
+    manager, t = start(cmd, tmp_path)
+    end = time.time() + 10
+    while not (marker.exists() and len(t.events) >= 3) and time.time() < end:
+        time.sleep(0.05)
+    assert manager.cancel(t.id)
+    wait_done(t)
+    assert t.status == 'cancelled'
+    assert [n for n in names if (tmp_path / n).exists()] == []
+    assert keep.exists()

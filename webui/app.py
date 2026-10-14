@@ -13,7 +13,8 @@ from webui.tasks import REPO_ROOT, ProbeError, TaskManager, probe
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 DEFAULT_PORT = 8765
-_PARTIAL_SUFFIXES = ('.part', '.ytdl')
+_LOCAL_HOSTS = ('127.0.0.1', 'localhost')
+_LEFTOVER_MARKERS = ('.part', '.ytdl', '.temp.', '-Frag')
 
 
 def _default_ffmpeg():
@@ -35,6 +36,17 @@ def create_app(*, downloads_dir, manager=None, probe_fn=probe, ffmpeg_path=_defa
     downloads_dir = os.path.abspath(downloads_dir)
     schema = build_schema()
 
+    @app.before_request
+    def only_this_page():
+        # The server can run any yt-dlp option (even --exec), so refuse requests that
+        # other web pages could forge: wrong Host (DNS rebinding) or cross-origin POSTs
+        if request.host.rsplit(':', 1)[0].strip('[]') not in _LOCAL_HOSTS:
+            return _error('只接受本机访问', status=403)
+        if request.method == 'POST':
+            origin = request.headers.get('Origin')
+            if not request.is_json or (origin and origin != f'http://{request.host}'):
+                return _error('只接受本页面发出的请求', status=403)
+
     @app.get('/')
     def index():
         return send_from_directory(STATIC_DIR, 'index.html')
@@ -45,7 +57,7 @@ def create_app(*, downloads_dir, manager=None, probe_fn=probe, ffmpeg_path=_defa
 
     @app.post('/api/preview-command')
     def preview_command():
-        body = request.get_json(force=True)
+        body = request.get_json()
         try:
             command = build_command_preview(body.get('form') or {}, extract_urls(body.get('text', '')))
         except ValueError as e:
@@ -54,7 +66,7 @@ def create_app(*, downloads_dir, manager=None, probe_fn=probe, ffmpeg_path=_defa
 
     @app.post('/api/probe')
     def probe_url():
-        body = request.get_json(force=True)
+        body = request.get_json()
         urls = extract_urls(body.get('text', ''))
         if not urls:
             return _error('没有找到链接')
@@ -65,7 +77,7 @@ def create_app(*, downloads_dir, manager=None, probe_fn=probe, ffmpeg_path=_defa
 
     @app.post('/api/tasks')
     def start_task():
-        body = request.get_json(force=True)
+        body = request.get_json()
         urls = extract_urls(body.get('text', ''))
         if not urls:
             return _error('没有找到链接')
@@ -111,7 +123,7 @@ def create_app(*, downloads_dir, manager=None, probe_fn=probe, ffmpeg_path=_defa
         files = []
         if os.path.isdir(downloads_dir):
             for entry in os.scandir(downloads_dir):
-                if entry.is_file() and not entry.name.endswith(_PARTIAL_SUFFIXES):
+                if entry.is_file() and not any(m in entry.name for m in _LEFTOVER_MARKERS):
                     stat = entry.stat()
                     files.append({'name': entry.name, 'size': stat.st_size, 'mtime': stat.st_mtime})
         files.sort(key=lambda f: f['mtime'], reverse=True)

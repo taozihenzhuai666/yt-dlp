@@ -30,7 +30,7 @@ _MULTI_ACTIONS = ('append', 'callback')
 
 
 def _kind(opt):
-    if opt.action in _FLAG_ACTIONS:
+    if opt.action in _FLAG_ACTIONS or not opt.takes_value():
         return 'flag'
     if opt.type == 'choice' or opt.choices:
         return 'choice'

@@ -97,8 +97,8 @@ def test_probe_ok_and_error(client):
 
 def test_tasks_list_and_cancel(client):
     assert client.get('/api/tasks').json == [{'id': 't1', 'status': 'finished'}]
-    assert client.post('/api/tasks/t1/cancel').json == {'ok': True}
-    assert client.post('/api/tasks/zz/cancel').json == {'ok': False}
+    assert client.post('/api/tasks/t1/cancel', json={}).json == {'ok': True}
+    assert client.post('/api/tasks/zz/cancel', json={}).json == {'ok': False}
 
 
 def test_events_sse(client):
@@ -125,3 +125,30 @@ def test_find_port_returns_free():
         assert find_port(busy) != busy
     finally:
         s.close()
+
+
+def test_rejects_non_json_post(client):
+    r = client.post('/api/tasks', data='{"text": "https://a", "form": {"--exec": ["calc.exe"]}}',
+                    content_type='text/plain')
+    assert r.status_code == 403 and client.manager.started is None
+
+
+def test_rejects_foreign_origin(client):
+    r = client.post('/api/tasks', json={'form': {}, 'text': 'https://a'},
+                    headers={'Origin': 'https://evil.example'})
+    assert r.status_code == 403 and client.manager.started is None
+    assert client.post('/api/tasks/t1/cancel', headers={'Origin': 'https://evil.example'}).status_code == 403
+
+
+def test_rejects_foreign_host(client):
+    r = client.get('/api/tasks', headers={'Host': 'attacker.example:8765'})
+    assert r.status_code in (400, 403)
+
+
+def test_same_origin_post_allowed(client):
+    r = client.post('/api/tasks', json={'form': {}, 'text': 'https://a'},
+                    headers={'Origin': 'http://localhost'})
+    assert r.status_code == 200
+    r = client.post('/api/tasks', json={'form': {}, 'text': 'https://a'},
+                    headers={'Host': '127.0.0.1:8765', 'Origin': 'http://127.0.0.1:8765'})
+    assert r.status_code == 200

@@ -36,3 +36,14 @@ def test_every_group_has_chinese_title():
     for g in build_schema()['groups']:
         assert g['title_zh'] and g['title_zh'] != g['title']
         assert g['title'] in GROUP_TITLES_ZH
+
+
+def test_options_without_value_are_flags():
+    by = {o['key']: o for o in _all(build_schema())}
+    p = create_parser()
+    for g in p.option_groups:
+        for opt in g.option_list:
+            key = (opt._long_opts or opt._short_opts)[0]
+            if key in by:
+                assert (by[key]['kind'] == 'flag') == (not opt.takes_value()), key
+    assert by['--write-thumbnail']['kind'] == 'flag'
