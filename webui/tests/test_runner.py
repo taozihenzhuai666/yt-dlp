@@ -80,3 +80,15 @@ def test_explain_error():
     assert '不支持' in explain_error('ERROR: Unsupported URL: https://a')
     assert '关闭' in explain_error('Could not copy Chrome cookie database')
     assert explain_error('everything fine') is None
+
+
+def test_explain_error_prefers_error_lines_over_warnings():
+    log = ('[BiliBili] Format(s) 1080P are missing; Use --cookies-from-browser or --cookies for the authentication.\n'
+           "ERROR: Unable to download video: [WinError 32] 另一个程序正在使用此文件，进程无法访问。: 'a.mp4'\n")
+    hint = explain_error(log)
+    assert 'Cookie' not in hint and '占用' in hint
+
+
+def test_explain_error_ignores_warning_only_when_error_unmatched():
+    log = 'WARNING: Use --cookies for the authentication.\nERROR: something unknown\n'
+    assert explain_error(log) is None

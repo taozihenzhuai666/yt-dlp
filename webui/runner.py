@@ -13,6 +13,7 @@ _URL_TRAILING = '.,;:!?)\'"'
 _NEEDS_QUOTES = re.compile(r'[\s&|<>^()%!*?;,"]')
 
 _ERROR_HINTS = [
+    (('winerror 32', 'being used by another process'), '文件被占用：先停止播放或关闭正在打开这个文件的程序，再重试'),
     (('cookie database', 'could not copy'), '读取浏览器 Cookie 失败：请完全关闭该浏览器后重试'),
     (('cookies', 'http error 403'), '这个网站需要 Cookie：在常用区「Cookie 来源」里选一个浏览器，并先关闭它'),
     (('unsupported url',), 'yt-dlp 不支持这个链接'),
@@ -108,7 +109,10 @@ def parse_line(line):
 
 
 def explain_error(log_text):
-    lowered = (log_text or '').lower()
+    lines = (log_text or '').splitlines()
+    # Warnings often mention cookies in passing; when yt-dlp reports an ERROR, judge by that alone
+    error_lines = [line for line in lines if 'ERROR' in line]
+    lowered = '\n'.join(error_lines or lines).lower()
     for keywords, hint in _ERROR_HINTS:
         if any(k in lowered for k in keywords):
             return hint
